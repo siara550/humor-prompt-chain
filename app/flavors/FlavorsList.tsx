@@ -36,6 +36,7 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
   const [editingFlavor, setEditingFlavor] = useState<Flavor | null>(null);
   const [generatingCaptions, setGeneratingCaptions] = useState(false);
   const [testImageUrl, setTestImageUrl] = useState("");
+  const [duplicating, setDuplicating] = useState<string | null>(null);
   const supabase = createClient();
 
   const loadSteps = async (flavorId: string) => {
@@ -92,6 +93,43 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
     setFlavors(flavors.filter(f => f.id !== id));
     if (selectedFlavor?.id === id) { setSelectedFlavor(null); setSteps([]); }
     setStatus("Deleted!");
+  };
+
+  const handleDuplicateFlavor = async (f: Flavor) => {
+    setDuplicating(f.id);
+    setStatus("Duplicating flavor...");
+    try {
+      const uniqueSuffix = Date.now().toString().slice(-7);
+      const newDesc = `${f.description ?? f.slug} Copy`;
+      const newSlug = `${f.slug}-copy-${uniqueSuffix}`;
+
+      const { data: newFlavor, error: flavorError } = await supabase
+        .from("humor_flavors")
+        .insert({ description: newDesc, slug: newSlug })
+        .select()
+        .single();
+      if (flavorError) { setStatus("Error: " + flavorError.message); return; }
+
+      const { data: originalSteps } = await supabase
+        .from("humor_flavor_steps")
+        .select("order_by, llm_temperature, llm_system_prompt, llm_user_prompt, llm_input_type_id, llm_output_type_id, llm_model_id, humor_flavor_step_type_id")
+        .eq("humor_flavor_id", f.id)
+        .order("order_by", { ascending: true });
+
+      if (originalSteps && originalSteps.length > 0) {
+        const newSteps = originalSteps.map(s => ({
+          ...s,
+          humor_flavor_id: newFlavor.id,
+        }));
+        const { error: stepsError } = await supabase.from("humor_flavor_steps").insert(newSteps);
+        if (stepsError) { setStatus("Error copying steps: " + stepsError.message); return; }
+      }
+
+      setFlavors([newFlavor, ...flavors]);
+      setStatus(`Duplicated as "${newDesc}"!`);
+    } finally {
+      setDuplicating(null);
+    }
   };
 
   const handleAddStep = async () => {
@@ -221,6 +259,13 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
                     </div>
                     <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                       <button onClick={() => setEditingFlavor(f)} className={`${btn} bg-white/10 text-white/60 text-xs`}>Edit</button>
+                      <button
+                        onClick={() => handleDuplicateFlavor(f)}
+                        disabled={duplicating === f.id}
+                        className={`${btn} bg-white/10 text-white/60 text-xs disabled:opacity-50`}
+                      >
+                        {duplicating === f.id ? "..." : "Copy"}
+                      </button>
                       <button onClick={() => handleDeleteFlavor(f.id)} className={`${btn} bg-red-500/15 text-red-400 text-xs`}>Delete</button>
                     </div>
                   </div>
