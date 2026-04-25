@@ -15,10 +15,13 @@ type Step = {
   humor_flavor_id: string;
   order_by: number;
   llm_temperature: number | null;
+  llm_system_prompt: string | null;
   created_datetime_utc: string | null;
 };
 
 const API_BASE = "https://api.almostcrackd.ai";
+
+const DEFAULT_PROMPT = "You are a funny assistant. Look at this image and write 5 short, witty captions that would make a college student laugh. Keep each caption under 15 words.";
 
 export default function FlavorsList({ initialFlavors, userId }: { initialFlavors: Flavor[]; userId: string }) {
   const [flavors, setFlavors] = useState<Flavor[]>(initialFlavors);
@@ -36,7 +39,7 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
   const loadSteps = async (flavorId: string) => {
     const { data } = await supabase
       .from("humor_flavor_steps")
-      .select("id, humor_flavor_id, order_by, llm_temperature, created_datetime_utc")
+      .select("id, humor_flavor_id, order_by, llm_temperature, llm_system_prompt, created_datetime_utc")
       .eq("humor_flavor_id", flavorId)
       .order("order_by", { ascending: true });
     setSteps(data ?? []);
@@ -95,7 +98,16 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
     const nextOrder = steps.length > 0 ? Math.max(...steps.map(s => s.order_by)) + 1 : 1;
     const { data, error } = await supabase
       .from("humor_flavor_steps")
-      .insert({ humor_flavor_id: selectedFlavor.id, order_by: nextOrder, llm_temperature: 0.7, llm_input_type_id: 1, llm_output_type_id: 1, llm_model_id: 14,  humor_flavor_step_type_id: 1 })      
+      .insert({
+        humor_flavor_id: selectedFlavor.id,
+        order_by: nextOrder,
+        llm_temperature: 0.7,
+        llm_input_type_id: 1,
+        llm_output_type_id: 1,
+        llm_model_id: 14,
+        humor_flavor_step_type_id: 1,
+        llm_system_prompt: DEFAULT_PROMPT,
+      })
       .select()
       .single();
     if (error) { setStatus("Error: " + error.message); return; }
@@ -103,13 +115,13 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
     setStatus("Step added!");
   };
 
-  const handleUpdateStep = async (step: Step, temp: number) => {
+  const handleUpdateStep = async (step: Step, field: "llm_temperature" | "llm_system_prompt", value: any) => {
     const { error } = await supabase
       .from("humor_flavor_steps")
-      .update({ llm_temperature: temp })
+      .update({ [field]: value })
       .eq("id", step.id);
     if (error) { setStatus("Error: " + error.message); return; }
-    setSteps(steps.map(s => s.id === step.id ? { ...s, llm_temperature: temp } : s));
+    setSteps(steps.map(s => s.id === step.id ? { ...s, [field]: value } : s));
     setStatus("Step updated!");
   };
 
@@ -221,26 +233,35 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
           <>
             <h2 className="text-lg font-semibold mb-1 text-orange-500">Steps for "{selectedFlavor.description ?? selectedFlavor.slug}"</h2>
             <p className="text-xs text-white/40 mb-4">Use arrows to reorder steps</p>
-            <div className="space-y-2 mb-4">
+            <div className="space-y-3 mb-4">
               {steps.map((step, i) => (
                 <div key={step.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 flex-1">
-                      <span className="text-orange-500 font-bold text-sm w-6">{i + 1}</span>
-                      <div>
-                        <p className="text-xs text-white/40 mb-1">Temperature</p>
-                        <input type="number" min="0" max="2" step="0.1"
-                          value={step.llm_temperature ?? 0.7}
-                          onChange={e => handleUpdateStep(step, parseFloat(e.target.value))}
-                          className="bg-white/5 border border-white/15 rounded-lg px-2 py-1 text-sm text-white outline-none w-20"
-                        />
-                      </div>
-                    </div>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <span className="text-orange-500 font-bold text-sm">Step {i + 1}</span>
                     <div className="flex gap-1">
                       <button onClick={() => handleMoveStep(i, "up")} disabled={i === 0} className={`${btn} bg-white/10 text-white/60 text-xs disabled:opacity-30`}>↑</button>
                       <button onClick={() => handleMoveStep(i, "down")} disabled={i === steps.length - 1} className={`${btn} bg-white/10 text-white/60 text-xs disabled:opacity-30`}>↓</button>
                       <button onClick={() => handleDeleteStep(step.id)} className={`${btn} bg-red-500/15 text-red-400 text-xs`}>Delete</button>
                     </div>
+                  </div>
+                  <div className="mb-2">
+                    <p className="text-xs text-white/40 mb-1">System Prompt</p>
+                    <textarea
+                      value={step.llm_system_prompt ?? ""}
+                      onChange={e => setSteps(steps.map(s => s.id === step.id ? { ...s, llm_system_prompt: e.target.value } : s))}
+                      onBlur={e => handleUpdateStep(step, "llm_system_prompt", e.target.value)}
+                      rows={3}
+                      className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white outline-none w-full resize-none focus:border-orange-500/50"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-white/40 mb-1">Temperature</p>
+                    <input
+                      type="number" min="0" max="2" step="0.1"
+                      value={step.llm_temperature ?? 0.7}
+                      onChange={e => handleUpdateStep(step, "llm_temperature", parseFloat(e.target.value))}
+                      className="bg-white/5 border border-white/15 rounded-lg px-2 py-1 text-sm text-white outline-none w-20"
+                    />
                   </div>
                 </div>
               ))}
