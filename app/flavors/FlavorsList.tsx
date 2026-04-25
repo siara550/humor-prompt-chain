@@ -95,8 +95,7 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
     const nextOrder = steps.length > 0 ? Math.max(...steps.map(s => s.order_by)) + 1 : 1;
     const { data, error } = await supabase
       .from("humor_flavor_steps")
-      .insert({ humor_flavor_id: selectedFlavor.id, order_by: nextOrder, llm_temperature: 0.7, llm_input_type_id: 1, llm_output_type_id: 1 })
-      .select()
+      .insert({ humor_flavor_id: selectedFlavor.id, order_by: nextOrder, llm_temperature: 0.7, llm_input_type_id: 1, llm_output_type_id: 1, llm_model_id: 14 })      .select()
       .single();
     if (error) { setStatus("Error: " + error.message); return; }
     setSteps([...steps, data]);
