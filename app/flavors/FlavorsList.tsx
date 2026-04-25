@@ -16,12 +16,14 @@ type Step = {
   order_by: number;
   llm_temperature: number | null;
   llm_system_prompt: string | null;
+  llm_user_prompt: string | null;
   created_datetime_utc: string | null;
 };
 
 const API_BASE = "https://api.almostcrackd.ai";
 
-const DEFAULT_PROMPT = "You are a funny assistant. Look at this image and write 5 short, witty captions that would make a college student laugh. Keep each caption under 15 words.";
+const DEFAULT_SYSTEM_PROMPT = "You are a funny assistant. Look at this image and write 5 short, witty captions that would make a college student laugh. Keep each caption under 15 words.";
+const DEFAULT_USER_PROMPT = "Here is the image. Please analyze it and respond according to your instructions.";
 
 export default function FlavorsList({ initialFlavors, userId }: { initialFlavors: Flavor[]; userId: string }) {
   const [flavors, setFlavors] = useState<Flavor[]>(initialFlavors);
@@ -39,7 +41,7 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
   const loadSteps = async (flavorId: string) => {
     const { data } = await supabase
       .from("humor_flavor_steps")
-      .select("id, humor_flavor_id, order_by, llm_temperature, llm_system_prompt, created_datetime_utc")
+      .select("id, humor_flavor_id, order_by, llm_temperature, llm_system_prompt, llm_user_prompt, created_datetime_utc")
       .eq("humor_flavor_id", flavorId)
       .order("order_by", { ascending: true });
     setSteps(data ?? []);
@@ -106,7 +108,8 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
         llm_output_type_id: 1,
         llm_model_id: 14,
         humor_flavor_step_type_id: 1,
-        llm_system_prompt: DEFAULT_PROMPT,
+        llm_system_prompt: DEFAULT_SYSTEM_PROMPT,
+        llm_user_prompt: DEFAULT_USER_PROMPT,
       })
       .select()
       .single();
@@ -115,7 +118,7 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
     setStatus("Step added!");
   };
 
-  const handleUpdateStep = async (step: Step, field: "llm_temperature" | "llm_system_prompt", value: any) => {
+  const handleUpdateStep = async (step: Step, field: "llm_temperature" | "llm_system_prompt" | "llm_user_prompt", value: any) => {
     const { error } = await supabase
       .from("humor_flavor_steps")
       .update({ [field]: value })
@@ -251,6 +254,16 @@ export default function FlavorsList({ initialFlavors, userId }: { initialFlavors
                       onChange={e => setSteps(steps.map(s => s.id === step.id ? { ...s, llm_system_prompt: e.target.value } : s))}
                       onBlur={e => handleUpdateStep(step, "llm_system_prompt", e.target.value)}
                       rows={3}
+                      className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white outline-none w-full resize-none focus:border-orange-500/50"
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <p className="text-xs text-white/40 mb-1">User Prompt</p>
+                    <textarea
+                      value={step.llm_user_prompt ?? ""}
+                      onChange={e => setSteps(steps.map(s => s.id === step.id ? { ...s, llm_user_prompt: e.target.value } : s))}
+                      onBlur={e => handleUpdateStep(step, "llm_user_prompt", e.target.value)}
+                      rows={2}
                       className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white outline-none w-full resize-none focus:border-orange-500/50"
                     />
                   </div>
